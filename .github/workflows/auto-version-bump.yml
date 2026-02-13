@@ -1,0 +1,70 @@
+name: Auto Version Bump
+
+on:
+    push:
+        branches:
+            - main
+
+permissions:
+    contents: write
+
+jobs:
+    bump-version:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+                  fetch-tags: true
+                  ref: main
+                  token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Configure Git
+              run: |
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
+
+            - name: Get latest tag and bump version
+              id: version
+              run: |
+                  # Fetch latest changes
+                  git fetch origin main
+                  git reset --hard origin/main
+
+                  # Get the latest tag (semver format v*.*.*)
+                  latest_tag=$(git tag -l "v*.*.*" --sort=-v:refname | head -n 1)
+
+                  if [ -z "$latest_tag" ]; then
+                      # No tags found, start with v0.1.0
+                      new_version="v0.1.0"
+                  else
+                      # Extract version numbers
+                      version="${latest_tag#v}"
+                      IFS='.' read -r major minor patch <<< "$version"
+
+                      # Bump patch version
+                      patch=$((patch + 1))
+                      new_version="v${major}.${minor}.${patch}"
+                  fi
+
+                  echo "new_version=$new_version" >> $GITHUB_OUTPUT
+                  echo "Bumping version to: $new_version"
+
+            - name: Check if tag exists
+              id: check_tag
+              run: |
+                  if git rev-parse "${{ steps.version.outputs.new_version }}" >/dev/null 2>&1; then
+                      echo "exists=true" >> $GITHUB_OUTPUT
+                  else
+                      echo "exists=false" >> $GITHUB_OUTPUT
+                  fi
+
+            - name: Create and push tag
+              if: steps.check_tag.outputs.exists == 'false'
+              run: |
+                  # Create tag on current HEAD
+                  git tag -a "${{ steps.version.outputs.new_version }}" -m "Auto version bump to ${{ steps.version.outputs.new_version }}"
+
+                  # Push the tag
+                  git push origin "${{ steps.version.outputs.new_version }}"

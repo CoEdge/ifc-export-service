@@ -1,0 +1,10 @@
+version: "3.8"
+services:
+  ifc-export-service:
+    build: .
+    ports:
+      - "8004:8004"
+    environment:
+      - PORT=8004
+      - MODELING_SERVICE_URL=http://3d-modeling-service:8003
+      - LOG_LEVEL=INFO

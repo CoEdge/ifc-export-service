@@ -1,0 +1,76 @@
+{
+  "project": {"name": "Test - Simple Wall"},
+  "source_units": "feet",
+  "coordinate_system": "z_up",
+  "storeys": [
+    {"id": "floor_1", "name": "Ground Floor", "elevation": 1.0}
+  ],
+  "elements": [
+    {
+      "id": "wall_1",
+      "type": "wall_segment",
+      "floor_id": "floor_1",
+      "mesh": {
+        "positions": [
+          0.0, 0.0, 0.0,
+          10.0, 0.0, 0.0,
+          10.0, 0.5, 0.0,
+          0.0, 0.5, 0.0,
+          0.0, 0.0, 9.0,
+          10.0, 0.0, 9.0,
+          10.0, 0.5, 9.0,
+          0.0, 0.5, 9.0
+        ],
+        "normals": [
+          0.0, -1.0, 0.0,
+          0.0, -1.0, 0.0,
+          0.0, 1.0, 0.0,
+          0.0, 1.0, 0.0,
+          0.0, -1.0, 0.0,
+          0.0, -1.0, 0.0,
+          0.0, 1.0, 0.0,
+          0.0, 1.0, 0.0
+        ],
+        "indices": [
+          0, 1, 5,
+          0, 5, 4,
+          1, 2, 6,
+          1, 6, 5,
+          2, 3, 7,
+          2, 7, 6,
+          3, 0, 4,
+          3, 4, 7,
+          4, 5, 6,
+          4, 6, 7,
+          0, 3, 2,
+          0, 2, 1
+        ]
+      },
+      "properties": {
+        "element_id": "wall_1",
+        "element_type": "wall_segment",
+        "groups": [
+          {
+            "id": "identity",
+            "label": "Identity",
+            "order": 0,
+            "fields": [
+              {"id": "id", "label": "ID", "value": "wall_1", "type": "text", "readonly": true},
+              {"id": "type", "label": "Type", "value": "wall_segment", "type": "text", "readonly": true}
+            ]
+          },
+          {
+            "id": "dimensions",
+            "label": "Dimensions",
+            "order": 1,
+            "fields": [
+              {"id": "height", "label": "Height", "value": 9.0, "type": "dimension", "unit": "ft"},
+              {"id": "thickness", "label": "Thickness", "value": 0.5, "type": "dimension", "unit": "ft"},
+              {"id": "length", "label": "Length", "value": 10.0, "type": "dimension", "unit": "ft"}
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
