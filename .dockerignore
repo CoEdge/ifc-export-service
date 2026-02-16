@@ -19,6 +19,8 @@ ENV/
 *~
 
 # Testing
+tests/
+pytest.ini
 .pytest_cache/
 .coverage
 htmlcov/

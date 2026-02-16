@@ -9,17 +9,25 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PATH=/opt/conda/envs/ifc-export-service/bin:$PATH
 
+# Copy environment.yml first to leverage Docker cache
+COPY environment.yml .
+
+# Install system deps, create conda env, then clean up build tools in a single layer
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential curl \
-    && rm -rf /var/lib/apt/lists/*
+    && conda env create -f environment.yml \
+    && conda clean -afy \
+    && apt-get purge -y --auto-remove build-essential \
+    && rm -rf /var/lib/apt/lists/* \
+    && find /opt/conda -name '*.a' -delete \
+    && find /opt/conda -name '*.pyc' -delete \
+    && find /opt/conda -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true \
+    && rm -rf /opt/conda/pkgs/*
 
-COPY environment.yml /app/
-RUN conda env create -f environment.yml && conda clean -afy
-
-COPY app/ /app/app/
-COPY run.py /app/
-COPY tests/ /app/tests/
-COPY pytest.ini /app/
+# Copy only production files
+COPY app/ ./app/
+COPY run.py .
+COPY VERSION .
 
 RUN adduser --disabled-password --gecos '' appuser && chown -R appuser:appuser /app
 USER appuser
