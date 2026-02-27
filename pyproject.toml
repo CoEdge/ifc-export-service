@@ -1,0 +1,25 @@
+[project]
+name = "ifc-export-service"
+version = "0.1.0"
+description = "BIM DSL / mesh to IFC4 export service for V-CAD"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+addopts = "-v --tb=short --strict-markers --disable-warnings"
+markers = [
+    "integration: marks tests that require external services",
+    "asyncio: marks async tests",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 100

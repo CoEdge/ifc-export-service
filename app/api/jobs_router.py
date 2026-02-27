@@ -1,29 +1,32 @@
 """
-Jobs API Router for async IFC export tasks.
+IFC Export Jobs API Router.
 
-Provides endpoints for creating and managing background jobs
-for IFC file generation.
+Service-specific job creation endpoints for IFC export tasks.
+Generic job management endpoints (status, result, cancel, list) are
+provided by the canonical factory in app.core.jobs_router.
 """
 
 import asyncio
-import base64
 import io
 import logging
 from typing import Any, Dict, List, Optional
 
 import httpx
-from fastapi import APIRouter, HTTPException, status
+from fastapi import HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.config import settings
+from app.core.job_manager import get_job_manager, JobStatus
+from app.core.jobs_router import create_jobs_router, create_job_response
 from app.models.schemas import IFCExportRequest
 from app.services.ifc_builder import IFCBuilder
-from app.services.job_manager import Job, JobStatus, get_job_manager
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/jobs", tags=["jobs"])
+# Create router with canonical job management endpoints
+# (GET /{job_id}, GET /{job_id}/result, DELETE /{job_id}, GET /)
+router = create_jobs_router(prefix="/api/v1/jobs", tags=["jobs"])
 
 # In-memory store for generated IFC file bytes, keyed by job_id
 _ifc_file_cache: Dict[str, bytes] = {}
@@ -50,51 +53,7 @@ class DSLInput(BaseModel):
     objects: List[_BIMObject]
 
 
-# -- Response models ----------------------------------------------------------
-
-class JobCreatedResponse(BaseModel):
-    job_id: str = Field(..., description="Unique job identifier")
-    status: JobStatus = Field(..., description="Current job status")
-    message: str = Field(..., description="Status message")
-    poll_url: str = Field(..., description="URL to poll for job status")
-
-
-class JobStatusResponse(BaseModel):
-    id: str
-    type: str
-    status: JobStatus
-    progress: int
-    message: str
-    metadata: Optional[Dict[str, Any]] = None
-    result: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
-    created_at: str
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
-
-
-class JobListResponse(BaseModel):
-    jobs: List[JobStatusResponse]
-    total: int
-
-
-# -- Helpers ------------------------------------------------------------------
-
-def _job_to_response(job: Job) -> JobStatusResponse:
-    return JobStatusResponse(
-        id=job.id,
-        type=job.type,
-        status=job.status,
-        progress=job.progress,
-        message=job.message,
-        metadata=job.metadata,
-        result=job.result,
-        error=job.error,
-        created_at=job.created_at.isoformat(),
-        started_at=job.started_at.isoformat() if job.started_at else None,
-        completed_at=job.completed_at.isoformat() if job.completed_at else None,
-    )
-
+# -- IFC build helpers --------------------------------------------------------
 
 async def _build_ifc(request: IFCExportRequest, job_id: str) -> Dict[str, Any]:
     """Build IFC file in a thread pool and cache the result bytes."""
@@ -167,59 +126,15 @@ async def _build_ifc_from_dsl(dsl_input: DSLInput, job_id: str) -> Dict[str, Any
     }
 
 
-# -- Job management endpoints ------------------------------------------------
+# -- IFC-specific endpoints ---------------------------------------------------
 
-@router.get("/{job_id}", response_model=JobStatusResponse)
-async def get_job_status(job_id: str):
-    """Get job status and result."""
-    job_manager = get_job_manager()
-    job = job_manager.get_job(job_id)
-
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Job {job_id} not found",
-        )
-
-    return _job_to_response(job)
-
-
-@router.get("/{job_id}/result")
-async def get_job_result(job_id: str):
-    """Get job result metadata.
-
-    Returns 202 if still processing, 200 with result if completed.
-    """
-    job_manager = get_job_manager()
-    job = job_manager.get_job(job_id)
-
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Job {job_id} not found",
-        )
-
-    if job.status in (JobStatus.PENDING, JobStatus.RUNNING):
-        raise HTTPException(
-            status_code=status.HTTP_202_ACCEPTED,
-            detail=f"Job is still {job.status.value}",
-        )
-
-    if job.status == JobStatus.FAILED:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=job.error or "Job failed",
-        )
-
-    return job.result
-
-
-@router.get("/{job_id}/download")
+@router.get(
+    "/{job_id}/download",
+    summary="Download IFC file",
+    description="Download the generated IFC file. Only available after the job has completed.",
+)
 async def download_ifc_file(job_id: str):
-    """Download the generated IFC file.
-
-    Only available after the job has completed successfully.
-    """
+    """Download the generated IFC file."""
     job_manager = get_job_manager()
     job = job_manager.get_job(job_id)
 
@@ -255,45 +170,14 @@ async def download_ifc_file(job_id: str):
     )
 
 
-@router.delete("/{job_id}")
-async def cancel_job(job_id: str):
-    """Cancel a running job."""
-    job_manager = get_job_manager()
-    success = job_manager.cancel_job(job_id)
-
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Job not found or cannot be cancelled",
-        )
-
-    # Clean up cached file if any
-    _ifc_file_cache.pop(job_id, None)
-
-    return {"message": f"Job {job_id} cancelled successfully"}
-
-
-@router.get("/", response_model=JobListResponse)
-async def list_jobs(job_type: Optional[str] = None, limit: int = 100):
-    """List recent jobs."""
-    job_manager = get_job_manager()
-    jobs = job_manager.list_jobs(job_type=job_type, limit=limit)
-
-    return JobListResponse(
-        jobs=[_job_to_response(job) for job in jobs],
-        total=len(jobs),
-    )
-
-
-# -- Job creation endpoints ---------------------------------------------------
-
-@router.post("/convert", response_model=JobCreatedResponse)
+@router.post(
+    "/convert",
+    summary="Convert mesh to IFC",
+    description="Create a job to convert intermediate mesh format to IFC4. "
+    "Returns immediately with a job ID for polling.",
+)
 async def create_convert_job(request: IFCExportRequest):
-    """Create a job to convert intermediate mesh format to IFC4.
-
-    Returns immediately with a job ID. Poll /api/v1/jobs/{job_id} for status.
-    When completed, download the file at /api/v1/jobs/{job_id}/download.
-    """
+    """Create a job to convert intermediate mesh format to IFC4."""
     job_manager = get_job_manager()
 
     job = job_manager.create_job(
@@ -305,28 +189,19 @@ async def create_convert_job(request: IFCExportRequest):
         },
     )
 
-    job_manager.start_background_job(
-        job.id,
-        _build_ifc,
-        request,
-        job.id,
-    )
+    job_manager.start_background_job(job.id, _build_ifc, request, job.id)
 
-    return JobCreatedResponse(
-        job_id=job.id,
-        status=job.status,
-        message="IFC conversion job created",
-        poll_url=f"/api/v1/jobs/{job.id}",
-    )
+    return create_job_response(job, "IFC conversion", prefix="/api/v1/jobs")
 
 
-@router.post("/convert-from-dsl", response_model=JobCreatedResponse)
+@router.post(
+    "/convert-from-dsl",
+    summary="Convert BIM DSL to IFC",
+    description="Create a job to convert BIM DSL to IFC4 via the 3d-modeling-service. "
+    "Returns immediately with a job ID for polling.",
+)
 async def create_convert_dsl_job(request: DSLInput):
-    """Create a job to convert BIM DSL to IFC4 via the 3d-modeling-service.
-
-    Returns immediately with a job ID. Poll /api/v1/jobs/{job_id} for status.
-    When completed, download the file at /api/v1/jobs/{job_id}/download.
-    """
+    """Create a job to convert BIM DSL to IFC4 via 3d-modeling-service."""
     job_manager = get_job_manager()
 
     job = job_manager.create_job(
@@ -337,16 +212,6 @@ async def create_convert_dsl_job(request: DSLInput):
         },
     )
 
-    job_manager.start_background_job(
-        job.id,
-        _build_ifc_from_dsl,
-        request,
-        job.id,
-    )
+    job_manager.start_background_job(job.id, _build_ifc_from_dsl, request, job.id)
 
-    return JobCreatedResponse(
-        job_id=job.id,
-        status=job.status,
-        message="IFC conversion from DSL job created",
-        poll_url=f"/api/v1/jobs/{job.id}",
-    )
+    return create_job_response(job, "IFC conversion from DSL", prefix="/api/v1/jobs")

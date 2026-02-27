@@ -13,10 +13,16 @@ from app.services.ifc_builder import IFCBuilder
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(tags=["sync-conversion"])
 
 
-@router.post("/convert")
+@router.post(
+    "/convert",
+    summary="Synchronous mesh-to-IFC conversion",
+    description="Convert intermediate mesh format to an IFC4 file. "
+    "Returns the IFC file directly as a streaming download. "
+    "For large models, prefer the async job-based endpoint at /api/v1/jobs/convert.",
+)
 async def convert_to_ifc(request: IFCExportRequest):
     """Convert intermediate mesh format to an IFC4 file."""
     builder = IFCBuilder()
@@ -48,7 +54,13 @@ class DSLInput(BaseModel):
     objects: List[_BIMObject]
 
 
-@router.post("/convert-from-dsl")
+@router.post(
+    "/convert-from-dsl",
+    summary="Synchronous BIM DSL-to-IFC conversion",
+    description="Convert BIM DSL to IFC4 via the 3d-modeling-service. "
+    "Forwards DSL to the 3d-modeling-service for mesh generation, then produces IFC4. "
+    "For large models, prefer the async job-based endpoint at /api/v1/jobs/convert-from-dsl.",
+)
 async def convert_dsl_to_ifc(request: DSLInput):
     """Convert BIM DSL to IFC4 via the 3d-modeling-service.
 
@@ -88,7 +100,7 @@ async def convert_dsl_to_ifc(request: DSLInput):
     )
 
 
-@router.get("/health")
+@router.get("/health", summary="V1 health check", tags=["health"])
 def health_v1():
     return {
         "status": "healthy",

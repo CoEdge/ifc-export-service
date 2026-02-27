@@ -31,12 +31,18 @@ def _clear_job_manager():
     yield
 
 
-async def _poll_until_done(client: httpx.AsyncClient, job_id: str, timeout: float = 30.0):
+async def _poll_until_done(
+    client: httpx.AsyncClient,
+    job_id: str,
+    timeout: float = 30.0,
+    include_result: bool = False,
+):
     """Poll a job until completed or timeout."""
     import time
     start = time.monotonic()
+    params = {"include_result": "true"} if include_result else {}
     while time.monotonic() - start < timeout:
-        resp = await client.get(f"/api/v1/jobs/{job_id}")
+        resp = await client.get(f"/api/v1/jobs/{job_id}", params=params)
         data = resp.json()
         if data["status"] in ("completed", "failed"):
             return data
@@ -63,7 +69,7 @@ class TestJobConvertEndpoint:
         resp = await async_client.post("/api/v1/jobs/convert", json=payload)
         job_id = resp.json()["job_id"]
 
-        data = await _poll_until_done(async_client, job_id)
+        data = await _poll_until_done(async_client, job_id, include_result=True)
 
         assert data["status"] == "completed"
         assert data["progress"] == 100
@@ -105,7 +111,7 @@ class TestJobConvertEndpoint:
         resp = await async_client.post("/api/v1/jobs/convert", json=payload)
         job_id = resp.json()["job_id"]
 
-        data = await _poll_until_done(async_client, job_id)
+        data = await _poll_until_done(async_client, job_id, include_result=True)
 
         assert data["status"] == "completed"
         assert data["result"]["element_count"] == 6
@@ -140,18 +146,18 @@ class TestJobManagementEndpoints:
     @pytest.mark.asyncio
     async def test_cancel_nonexistent_job(self, async_client):
         resp = await async_client.delete("/api/v1/jobs/nonexistent-id")
-        assert resp.status_code == 400
+        assert resp.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_job_metadata(self, async_client):
+    async def test_job_info(self, async_client):
         payload = json.loads((FIXTURES_DIR / "simple_wall.json").read_text())
         resp = await async_client.post("/api/v1/jobs/convert", json=payload)
         job_id = resp.json()["job_id"]
 
         status_resp = await async_client.get(f"/api/v1/jobs/{job_id}")
         data = status_resp.json()
+        assert data["job_id"] == job_id
         assert data["type"] == "ifc-convert"
-        assert data["metadata"]["element_count"] == 1
         assert "created_at" in data
 
     @pytest.mark.asyncio
