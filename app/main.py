@@ -12,10 +12,6 @@ from app.core.health import router as health_router
 from app.api.v1.router import router as v1_router
 from app.api.jobs_router import router as jobs_router
 
-logging.basicConfig(
-    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
-    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-)
 logger = logging.getLogger(__name__)
 
 

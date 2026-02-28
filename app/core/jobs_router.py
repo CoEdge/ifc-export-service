@@ -62,7 +62,7 @@ def create_job_response(job, job_type: str, prefix: str = "/jobs") -> JobCreated
     return JobCreatedResponse(
         job_id=job.id,
         status=job.status.value,
-        message=f"{job_type} job started",
+        message=f"{job_type} job created",
         poll_url=f"{prefix}/{job.id}",
     )
 
@@ -142,9 +142,8 @@ def create_jobs_router(
         if not job:
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
         if job.status in [JobStatus.COMPLETED, JobStatus.FAILED]:
-            raise HTTPException(status_code=400, detail="Cannot cancel a completed or failed job")
-        job.status = JobStatus.FAILED
-        job.error = "Job cancelled by user"
+            return {"message": "Job already completed or failed", "job_id": job_id}
+        job_manager.cancel_job(job_id)
         logger.info(f"Job {job_id} cancelled")
         return {"message": f"Job {job_id} cancelled"}
 
@@ -154,14 +153,12 @@ def create_jobs_router(
     ):
         """List all jobs (most recent first), optionally filtered by type."""
         job_manager = get_job_manager()
-        all_jobs = list(job_manager._jobs.values())
-        if job_type:
-            all_jobs = [j for j in all_jobs if j.type == job_type]
-        all_jobs.sort(key=lambda j: j.created_at, reverse=True)
+        all_jobs = job_manager.list_jobs(job_type=job_type)
+        total = len(all_jobs)
         paginated = all_jobs[offset : offset + limit]
         return JobListResponse(
             jobs=[_job_to_status_response(j) for j in paginated],
-            total=len(all_jobs),
+            total=total,
         )
 
     return router
