@@ -28,16 +28,6 @@ jobs:
                   channels: conda-forge,defaults
                   channel-priority: flexible
 
-            - name: Cache Conda Environment
-              uses: actions/cache@v4
-              with:
-                  path: |
-                      ~/conda_pkgs_dir
-                      ~/.conda
-                  key: ${{ runner.os }}-conda-${{ hashFiles('environment.yml') }}
-                  restore-keys: |
-                      ${{ runner.os }}-conda-
-
             - name: Create Conda Environment
               shell: bash -l {0}
               run: |
@@ -55,13 +45,3 @@ jobs:
               run: |
                   conda activate ifc-export-service
                   make test
-
-            - name: Upload Test Results
-              if: always()
-              uses: actions/upload-artifact@v4
-              with:
-                  name: test-results
-                  path: |
-                      .pytest_cache/
-                      test_results/
-                  retention-days: 7
