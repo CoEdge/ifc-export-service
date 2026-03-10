@@ -82,7 +82,7 @@ jobs:
               with:
                   images: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}
                   flavor: |
-                      latest=true
+                      latest=false
                   tags: |
                       type=semver,pattern={{version}},value=${{ steps.version.outputs.version }}
                       type=sha,prefix=sha-
@@ -97,8 +97,6 @@ jobs:
                   push: true
                   tags: ${{ steps.meta.outputs.tags }}
                   labels: ${{ steps.meta.outputs.labels }}
-                  cache-from: type=gha
-                  cache-to: type=gha,mode=max
 
             - name: Image digest
               run: |
