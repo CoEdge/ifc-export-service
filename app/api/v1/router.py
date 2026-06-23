@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.config import settings
-from app.models.schemas import IFCExportRequest
+from app.models.schemas import IFCExportRequest, SteelExportRequest
 from app.services.ifc_builder import IFCBuilder
 
 logger = logging.getLogger(__name__)
@@ -32,6 +32,26 @@ async def convert_to_ifc(request: IFCExportRequest):
         io.BytesIO(ifc_bytes),
         media_type="application/octet-stream",
         headers={"Content-Disposition": 'attachment; filename="model.ifc"'},
+    )
+
+
+@router.post(
+    "/convert-steel",
+    summary="Synchronous steel-model-to-IFC conversion",
+    description="Convert a Steel Structure model (parametric members + transforms) "
+    "to an IFC4 file with IfcColumn/IfcBeam/IfcFooting and I-shape profiles. "
+    "Returns the IFC file directly. For large models, prefer the async job-based "
+    "endpoint at /api/v1/jobs/convert-steel.",
+)
+async def convert_steel_to_ifc(request: SteelExportRequest):
+    """Convert a steel structural model to a parametric IFC4 file."""
+    builder = IFCBuilder()
+    ifc_bytes = builder.build_steel(request)
+
+    return StreamingResponse(
+        io.BytesIO(ifc_bytes),
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": 'attachment; filename="steel-model.ifc"'},
     )
 
 

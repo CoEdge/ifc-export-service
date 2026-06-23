@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 from app.config import settings
 from app.core.job_manager import get_job_manager, JobStatus
 from app.core.jobs_router import create_jobs_router, create_job_response
-from app.models.schemas import IFCExportRequest
+from app.models.schemas import IFCExportRequest, SteelExportRequest
 from app.services.ifc_builder import IFCBuilder
 
 logger = logging.getLogger(__name__)
@@ -126,6 +126,30 @@ async def _build_ifc_from_dsl(dsl_input: DSLInput, job_id: str) -> Dict[str, Any
     }
 
 
+async def _build_steel_ifc(request: SteelExportRequest, job_id: str) -> Dict[str, Any]:
+    """Build a parametric steel IFC file in a thread pool and cache the bytes."""
+    job_manager = get_job_manager()
+
+    job_manager.update_job(job_id, progress=10, message="Parsing steel members")
+
+    builder = IFCBuilder()
+
+    job_manager.update_job(job_id, progress=30, message="Building steel IFC model")
+
+    ifc_bytes = await asyncio.to_thread(builder.build_steel, request)
+
+    job_manager.update_job(job_id, progress=90, message="Finalizing IFC file")
+
+    _ifc_file_cache[job_id] = ifc_bytes
+
+    return {
+        "file_size": len(ifc_bytes),
+        "element_count": len(request.members),
+        "storey_count": len(request.storeys) if request.storeys else 0,
+        "download_url": f"/api/v1/jobs/{job_id}/download",
+    }
+
+
 # -- IFC-specific endpoints ---------------------------------------------------
 
 @router.get(
@@ -215,3 +239,27 @@ async def create_convert_dsl_job(request: DSLInput):
     job_manager.start_background_job(job.id, _build_ifc_from_dsl, request, job.id)
 
     return create_job_response(job, "IFC conversion from DSL", prefix="/api/v1/jobs")
+
+
+@router.post(
+    "/convert-steel",
+    summary="Convert steel model to IFC",
+    description="Create a job to convert a Steel Structure model to IFC4 "
+    "(parametric IfcColumn/IfcBeam/IfcFooting). Returns immediately with a job ID.",
+)
+async def create_convert_steel_job(request: SteelExportRequest):
+    """Create a job to convert a steel structural model to IFC4."""
+    job_manager = get_job_manager()
+
+    job = job_manager.create_job(
+        job_type="ifc-convert-steel",
+        metadata={
+            "member_count": len(request.members),
+            "storey_count": len(request.storeys) if request.storeys else 0,
+            "source_units": request.source_units,
+        },
+    )
+
+    job_manager.start_background_job(job.id, _build_steel_ifc, request, job.id)
+
+    return create_job_response(job, "Steel IFC conversion", prefix="/api/v1/jobs")

@@ -7,9 +7,9 @@ from typing import Dict, List
 
 from app.ifc.templates import create_ifc4_file
 from app.ifc.hierarchy import create_spatial_hierarchy
-from app.services.element_mapper import create_ifc_element
+from app.services.element_mapper import create_ifc_element, create_ifc_steel_element
 from app.services.property_mapper import create_property_sets
-from app.models.schemas import IFCExportRequest
+from app.models.schemas import IFCExportRequest, SteelExportRequest
 
 import ifcopenshell
 
@@ -83,6 +83,64 @@ class IFCBuilder:
                 )
 
         # 5. Serialize to STEP Physical File
+        return self._serialize(ifc)
+
+    def build_steel(self, request: SteelExportRequest) -> bytes:
+        """Convert a ``SteelExportRequest`` into IFC4 file bytes.
+
+        Builds parametric steel members (IfcColumn/IfcBeam/IfcFooting with
+        extruded I-shape / rectangle solids) into a Project→Site→Building→Storey
+        hierarchy, attaching property sets and grouping members by storey.
+
+        Args:
+            request: Validated steel export request (project info, storeys, members).
+
+        Returns:
+            Raw ``.ifc`` file content as ``bytes``.
+        """
+        project_data = request.project
+        source_units = request.source_units
+
+        ifc, project, body_context = create_ifc4_file(
+            project_name=project_data.name if project_data else "Steel Structure",
+        )
+
+        storeys_raw = [s.model_dump() for s in (request.storeys or [])]
+        site, building, storey_map = create_spatial_hierarchy(
+            ifc,
+            project,
+            storeys_raw,
+            source_units=source_units,
+            site_name=(request.site.name if request.site else "Default Site"),
+            building_name=(request.building.name if request.building else "Default Building"),
+        )
+
+        elements_by_storey: Dict[int, List] = defaultdict(list)
+
+        for member in request.members:
+            member_dict = member.model_dump()
+
+            storey = storey_map.get(member.floor_id) if member.floor_id else None
+            if storey is None:
+                storey = next(iter(storey_map.values()))
+
+            ifc_element = create_ifc_steel_element(
+                ifc, member_dict, body_context, source_units,
+            )
+            create_property_sets(
+                ifc, ifc_element, member_dict.get("properties"), source_units,
+            )
+            elements_by_storey[id(storey)].append(ifc_element)
+
+        for storey_entity in storey_map.values():
+            storey_elements = elements_by_storey.get(id(storey_entity), [])
+            if storey_elements:
+                ifc.createIfcRelContainedInSpatialStructure(
+                    GlobalId=ifcopenshell.guid.new(),
+                    RelatingStructure=storey_entity,
+                    RelatedElements=storey_elements,
+                )
+
         return self._serialize(ifc)
 
     @staticmethod
