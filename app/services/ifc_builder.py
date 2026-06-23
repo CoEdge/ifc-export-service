@@ -9,6 +9,7 @@ from app.ifc.templates import create_ifc4_file
 from app.ifc.hierarchy import create_spatial_hierarchy
 from app.services.element_mapper import create_ifc_element, create_ifc_steel_element
 from app.services.property_mapper import create_property_sets
+from app.services.steel_storeys import normalize_storeys_and_assign
 from app.models.schemas import IFCExportRequest, SteelExportRequest
 
 import ifcopenshell
@@ -105,11 +106,16 @@ class IFCBuilder:
             project_name=project_data.name if project_data else "Steel Structure",
         )
 
+        # Derive storeys (synthesizing a below-grade Foundations storey for
+        # footings / foundation columns) and resolve each member to a storey.
         storeys_raw = [s.model_dump() for s in (request.storeys or [])]
+        members_raw = [m.model_dump() for m in request.members]
+        storeys_norm, assignment = normalize_storeys_and_assign(storeys_raw, members_raw)
+
         site, building, storey_map = create_spatial_hierarchy(
             ifc,
             project,
-            storeys_raw,
+            storeys_norm,
             source_units=source_units,
             site_name=(request.site.name if request.site else "Default Site"),
             building_name=(request.building.name if request.building else "Default Building"),
@@ -117,10 +123,9 @@ class IFCBuilder:
 
         elements_by_storey: Dict[int, List] = defaultdict(list)
 
-        for member in request.members:
-            member_dict = member.model_dump()
-
-            storey = storey_map.get(member.floor_id) if member.floor_id else None
+        for member_dict in members_raw:
+            storey_id = assignment.get(member_dict["id"])
+            storey = storey_map.get(storey_id) if storey_id else None
             if storey is None:
                 storey = next(iter(storey_map.values()))
 

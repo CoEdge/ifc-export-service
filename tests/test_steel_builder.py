@@ -101,6 +101,30 @@ class TestBuildSteel:
         data = IFCBuilder().build_steel(req)
         assert data.startswith(b"ISO-10303-21")
 
+    def test_synthesizes_foundations_storey(self, tmp_path):
+        # Supply only occupied-floor storeys; add a footing + foundation column.
+        d = steel_request_dict()
+        d["storeys"] = [
+            {"id": "L1", "name": "Level 1", "elevation": 0.0},
+            {"id": "L2", "name": "Level 2", "elevation": 12.0},
+        ]
+        d["members"].append({
+            "id": "col_ext_1", "kind": "steel_column", "designation": "W12x53",
+            "length_ft": 4.0, "transform": make_transform((0, 0, 1), (1, 0, 0), (0, 0, -4)),
+        })
+        # pad_1 already present with floor_id "FND" (no such storey now).
+        data = IFCBuilder().build_steel(SteelExportRequest(**d))
+        p = tmp_path / "steel.ifc"; p.write_bytes(data)
+        ifc = ifcopenshell.open(str(p))
+
+        names = {s.Name for s in ifc.by_type("IfcBuildingStorey")}
+        assert "Foundations" in names  # synthesized
+        contained = {
+            rel.RelatingStructure.Name: {e.Name for e in rel.RelatedElements}
+            for rel in ifc.by_type("IfcRelContainedInSpatialStructure")
+        }
+        assert {"pad_1", "col_ext_1"} <= contained.get("Foundations", set())
+
 
 class TestConvertSteelEndpoints:
     def test_sync_convert_steel(self, client):
