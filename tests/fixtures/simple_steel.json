@@ -1,0 +1,52 @@
+{
+  "project": { "name": "Simple Steel" },
+  "source_units": "feet",
+  "storeys": [
+    { "id": "L1", "name": "Level 1", "elevation": 0.0 },
+    { "id": "L2", "name": "Level 2", "elevation": 12.0 }
+  ],
+  "members": [
+    {
+      "id": "col_1",
+      "kind": "steel_w_column",
+      "designation": "W12x53",
+      "length_ft": 12.0,
+      "floor_id": "L1",
+      "transform": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0],
+      "steel_grade": "A992",
+      "properties": {
+        "groups": [
+          {
+            "label": "Structural",
+            "fields": [
+              { "label": "Axial Load (Pu)", "value": 171.7, "type": "number", "unit": "kips" }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "beam_1",
+      "kind": "steel_w_beam",
+      "designation": "W16x26",
+      "length_ft": 30.0,
+      "floor_id": "L2",
+      "transform": [0, 0, 1, 0, 0, -1, 0, 0, 1, 0, 0, 12]
+    },
+    {
+      "id": "joist_1",
+      "kind": "steel_joist",
+      "designation": "W12x14",
+      "length_ft": 25.0,
+      "floor_id": "L2",
+      "transform": [0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 12]
+    },
+    {
+      "id": "pad_1",
+      "kind": "steel_foundation_pad",
+      "floor_id": "L1",
+      "footing": { "width_ft": 6.0, "depth_ft": 6.0, "thickness_ft": 2.0 },
+      "transform": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, -4]
+    }
+  ]
+}
