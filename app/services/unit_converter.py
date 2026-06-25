@@ -5,6 +5,7 @@ IFC4 conventionally uses metres as the base length unit.
 """
 
 FEET_TO_METERS: float = 0.3048
+INCH_TO_METERS: float = 0.0254
 
 
 def ft_to_m(value: float) -> float:
