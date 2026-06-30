@@ -18,6 +18,9 @@ ELEMENT_TYPE_TO_IFC: dict[str, str] = {
     "roof": "IfcRoof",
     "door": "IfcDoor",
     "window": "IfcWindow",
+    # Tilt-up warehouse elements (BIM DSL v0.4.0)
+    "tilt_panel": "IfcWall",
+    "dock_door": "IfcDoor",
 }
 
 # Optional predefined types for more specific IFC classification
@@ -29,6 +32,9 @@ ELEMENT_PREDEFINED_TYPE: dict[str, str] = {
     "roof": "GABLE_ROOF",
     "door": "DOOR",
     "window": "WINDOW",
+    # Tilt-up precast concrete wall panel; dock door is a loading-bay door.
+    "tilt_panel": "SOLIDWALL",
+    "dock_door": "DOOR",
 }
 
 
