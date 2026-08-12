@@ -18,9 +18,9 @@ class MeshData(BaseModel):
 class ElementData(BaseModel):
     """A single BIM element with mesh and metadata."""
     id: str
-    type: str = Field(..., description="Element type: wall_segment, wall_junction, floor, foundation, roof, door, window")
+    type: str = Field(..., description="Element type: wall_segment, wall_junction, floor, foundation, roof, door, window, space")
     floor_id: Optional[str] = Field(None, description="Reference to storey for spatial grouping")
-    mesh: MeshData
+    mesh: Optional[MeshData] = Field(None, description="Tessellated geometry; None for planning entities (spaces), which are skipped")
     properties: Optional[Dict[str, Any]] = Field(None, description="Element metadata (groups/fields)")
 
 

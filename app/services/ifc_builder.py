@@ -54,6 +54,16 @@ class IFCBuilder:
         for elem in request.elements:
             elem_dict = elem.model_dump()
 
+            # Meshless elements (e.g. `space` planning entities, should one
+            # ever reach this contract) cannot become product geometry —
+            # skip with a log instead of KeyErroring deep in the mapper.
+            if not elem_dict.get("mesh"):
+                logger.info(
+                    "Skipping meshless element %s (%s) — no geometry to export",
+                    elem_dict.get("id"), elem_dict.get("type"),
+                )
+                continue
+
             # Resolve storey
             floor_id = elem.floor_id
             storey = storey_map.get(floor_id) if floor_id else None
